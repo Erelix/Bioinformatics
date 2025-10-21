@@ -5,81 +5,87 @@ from Bio.Seq import Seq
 
 def find_valid_orfs(sequence):
     """
-    1. Pateiktoje sekoje fasta formatu surastu visas start ir stop kodonų poras, tarp kurių nebutu stop kodono (ir tiesioginei sekai ir jos reverse komplementui).
-    2. Kiekvienam stop kodonui parinkti toliausiai nuo jo esanti start kodoną (su salyga, kad tarp ju nera kito stop kodono)
+    For each reading frame, find stop codons and for each stop codon choose
+    the farthest start codon (ATG) before it, provided there is no other stop
+    codon in between.
+    Returns list of tuples (start, stop, frame).
     """
     valid_orfs = []
-    
-    start_codon = 'ATG'
-    stop_codons = ['TAA', 'TAG', 'TGA']
+    start_codon = "ATG"
+    stop_codons = {"TAA", "TAG", "TGA"}
 
     for frame in range(3):
         frame_seq = sequence[frame:]
-        
-        # Find all start codons in this frame
-        start_positions = []
-        for match in re.finditer(start_codon, frame_seq):
-            start_positions.append(match.start())
-        
-        # For each start codon, find the next stop codon
-        for start_idx in start_positions:
-            absolute_start = frame + start_idx
-            remaining_seq = frame_seq[start_idx:]
-            
-            # Check every codon after the start
-            found_stop = False
-            
-            for i in range(3, len(remaining_seq) - 2, 3):
-                codon = remaining_seq[i:i+3]
-                
-                if codon in stop_codons:
-                    # Found a stop codon - valid ORF
-                    absolute_stop = absolute_start + i + 3
-                    valid_orfs.append((absolute_start, absolute_stop, frame))
-                    found_stop = True
+        codons = [frame_seq[i:i+3] for i in range(0, len(frame_seq)-2, 3)]
+        start_positions = [i*3 + frame for i, c in enumerate(codons) if c == start_codon]
+        stop_positions = [i*3 + frame for i, c in enumerate(codons) if c in stop_codons]
+
+        for stop_idx in stop_positions:
+            farthest_start = None
+            for start_idx in reversed(start_positions):
+                if start_idx < stop_idx:
+                    if any(s > start_idx and s < stop_idx for s in stop_positions):
+                        break
+                    farthest_start = start_idx
                     break
-    
+            if farthest_start is not None:
+                valid_orfs.append((farthest_start, stop_idx + 3, frame))
     return valid_orfs
 
-def analyze_sequence(seq_record):
-    """Analyze a sequence and its reverse complement for valid ORFs"""
+
+def filter_orfs_min_length(orfs, min_length_bp=100):
+    """Keep only ORFs >= min_length_bp."""
+    return [orf for orf in orfs if (orf[1] - orf[0]) >= min_length_bp]
+
+
+def translate_orf(sequence, start, stop):
+    """Translate DNA to protein using Biopython codon table 1."""
+    dna_seq = Seq(sequence[start:stop])
+    prot = str(dna_seq.translate(table=1))
+    # Remove trailing stop symbol '*'
+    if prot.endswith("*"):
+        prot = prot[:-1]
+    return prot
+
+
+def analyze_sequence(seq_record, min_orf_len_bp=100):
+    """Find valid ORFs, filter short ones, and translate to protein."""
     sequence = str(seq_record.seq).upper()
-    
     print(f"Analyzing: {seq_record.id}")
     print(f"Sequence length: {len(sequence)}")
-    
-    forward_orfs = find_valid_orfs(sequence)
-    print(f"Forward strand - {len(forward_orfs)} ORFs")
-    
-    rev_comp = str(seq_record.seq.reverse_complement())
-    reverse_orfs = find_valid_orfs(rev_comp)
-    print(f"Reverse complement - {len(reverse_orfs)} ORFs")
 
-    print(f"{'='*40}"+"\n")
-    
-    # Print details of found ORFs (first 5 only)
-    # if forward_orfs:
-    #     print("\nForward strand ORFs (first 5):")
-    #     for start, stop, frame in forward_orfs[:5]:
-    #         length = stop - start
-    #         orf_seq = sequence[start:stop]
-    #         print(f"  Frame {frame}: Start={start}, Stop={stop}, Length={length}")
-    #         print(f"    Start: {orf_seq[:10]}... Stop: ...{orf_seq[-10:]}")
-    
-    # if reverse_orfs:
-    #     print("\nReverse complement ORFs (first 5):")
-    #     for start, stop, frame in reverse_orfs[:5]:
-    #         length = stop - start
-    #         orf_seq = rev_comp[start:stop]
-    #         print(f"  Frame {frame}: Start={start}, Stop={stop}, Length={length}")
-    #         print(f"    Start: {orf_seq[:10]}... Stop: ...{orf_seq[-10:]}")
-    
+    # Forward strand
+    forward_orfs = filter_orfs_min_length(find_valid_orfs(sequence), min_orf_len_bp)
+    forward_proteins = [translate_orf(sequence, s, e) for s, e, f in forward_orfs]
+    print(f"Forward ORFs (≥{min_orf_len_bp}bp): {len(forward_orfs)}")
+
+    # Reverse strand
+    rev_comp = str(seq_record.seq.reverse_complement()).upper()
+    reverse_orfs = filter_orfs_min_length(find_valid_orfs(rev_comp), min_orf_len_bp)
+    reverse_proteins = [translate_orf(rev_comp, s, e) for s, e, f in reverse_orfs]
+    print(f"Reverse ORFs (≥{min_orf_len_bp}bp): {len(reverse_orfs)}")
+
+    # Show sample translated protein sequences (first few)
+    if forward_proteins:
+        print("\nExample translated protein sequences (forward):")
+        for i, prot in enumerate(forward_proteins[:3], start=1):
+            print(f"  ORF{i}: {prot[:60]}{'...' if len(prot) > 60 else ''}")
+
+    if reverse_proteins:
+        print("\nExample translated protein sequences (reverse):")
+        for i, prot in enumerate(reverse_proteins[:3], start=1):
+            print(f"  ORF{i}: {prot[:60]}{'...' if len(prot) > 60 else ''}")
+
+    print("=" * 50 + "\n")
+
     return {
-        'name': seq_record.id,
-        'forward_orfs': forward_orfs,
-        'reverse_orfs': reverse_orfs,
-        'total_orfs': len(forward_orfs) + len(reverse_orfs)
+        "name": seq_record.id,
+        "forward_orfs": forward_orfs,
+        "forward_proteins": forward_proteins,
+        "reverse_orfs": reverse_orfs,
+        "reverse_proteins": reverse_proteins,
     }
+
 
 def main_multiple_files():
     fasta_files = {
@@ -92,45 +98,18 @@ def main_multiple_files():
         'mamalian3': r".\viruses\viruses\data\mamalian3.fasta",
         'mamalian4': r".\viruses\viruses\data\mamalian4.fasta",
     }
-    
-    print("Checking files:", fasta_files)
-    
-    all_results = {}
-    
+
     for file_name, file_path in fasta_files.items():
         if not os.path.exists(file_path):
             print(f"Warning: File not found - {file_path}")
             continue
-        
-        try:
-            print(f"{'='*40}")
-            print(f"File: {file_name}"+".fasta")
-            
-            sequences = list(SeqIO.parse(file_path, "fasta"))
-            file_results = []
-            
-            for seq_record in sequences:
-                result = analyze_sequence(seq_record)
-                file_results.append(result)
-            
-            all_results[file_name] = file_results
-            
-        except Exception as e:
-            print(f"Error processing {file_name}: {e}")
-    
-    # # Final summary comparing all files
-    # print("\n" + "=" * 60)
-    # print("COMPARATIVE SUMMARY")
-    # print("=" * 60)
-    # for file_name, results in all_results.items():
-    #     total_orfs = sum(result['total_orfs'] for result in results)
-    #     total_forward = sum(len(result['forward_orfs']) for result in results)
-    #     total_reverse = sum(len(result['reverse_orfs']) for result in results)
-        
-    #     print(f"{file_name}:")
-    #     print(f"  Total ORFs: {total_orfs}")
-    #     print(f"  Forward: {total_forward}, Reverse: {total_reverse}")
-    #     print(f"  Sequences analyzed: {len(results)}")
+
+        print("=" * 60)
+        print(f"File: {file_name}.fasta")
+        print("=" * 60)
+
+        for seq_record in SeqIO.parse(file_path, "fasta"):
+            analyze_sequence(seq_record)
 
 
 if __name__ == "__main__":
