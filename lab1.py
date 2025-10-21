@@ -5,8 +5,8 @@ from Bio.Seq import Seq
 
 def find_valid_orfs(sequence):
     """
-    Find all valid start-stop codon pairs in a sequence where no stop codon exists between them.
-    Returns list of tuples: (start_position, stop_position, frame)
+    1. Pateiktoje sekoje fasta formatu surastu visas start ir stop kodonų poras, tarp kurių nebutu stop kodono (ir tiesioginei sekai ir jos reverse komplementui).
+    2. Kiekvienam stop kodonui parinkti toliausiai nuo jo esanti start kodoną (su salyga, kad tarp ju nera kito stop kodono)
     """
     valid_orfs = []
     
@@ -48,11 +48,9 @@ def analyze_sequence(seq_record):
     print(f"Analyzing: {seq_record.id}")
     print(f"Sequence length: {len(sequence)}")
     
-    # Analyze forward strand
     forward_orfs = find_valid_orfs(sequence)
     print(f"Forward strand - {len(forward_orfs)} ORFs")
     
-    # Analyze reverse complement using Biopython
     rev_comp = str(seq_record.seq.reverse_complement())
     reverse_orfs = find_valid_orfs(rev_comp)
     print(f"Reverse complement - {len(reverse_orfs)} ORFs")
