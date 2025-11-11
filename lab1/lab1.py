@@ -1,4 +1,3 @@
-import re
 import os
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -9,10 +8,10 @@ import pandas as pd
 
 def find_valid_orfs(sequence):
     """
-    For each reading frame, find stop codons and for each stop codon choose
-    the farthest start codon (ATG) before it, provided there is no other stop
-    codon in between.
-    Returns list of tuples (start, stop, frame).
+    1.  Pateiktoje sekoje fasta formatu surastu visas start ir stop kodonų poras, 
+        tarp kurių nebutu stop kodono (ir tiesioginei sekai ir jos reverse komplementui). 
+    2.  Kiekvienam stop kodonui parinkti toliausiai nuo jo esanti start kodoną 
+        (su salyga, kad tarp ju nera kito stop kodono)
     """
     valid_orfs = []
     start_codon = "ATG"
@@ -38,12 +37,20 @@ def find_valid_orfs(sequence):
 
 
 def filter_orfs_min_length(orfs, min_length_bp=100):
-    """Keep only ORFs >= min_length_bp."""
+    """
+    3.  Atfiltruokite visus fragmentus ("tai butu baltymų 
+        koduojancios sekos"), kurie trumpesni nei 100 bp.
+    """
     return [orf for orf in orfs if (orf[1] - orf[0]) >= min_length_bp]
 
 
 def translate_orf(sequence, start, stop):
-    """Translate DNA to protein using Biopython codon table 1."""
+    """
+    4.  Konvertuokite koduojancias sekas (start stop kodonu poras) 
+        i baltymo seka. Kodonus ir dikodonus analizuokite ne DNR o baltymo 
+        lygmenyje (vienas dikodonas - aminorugstis)., t.y tolesnuose 
+        zingsniuose - kodonas - viena aminorugstis, dikodonas - dvi.
+    """
     dna_seq = Seq(sequence[start:stop])
     prot = str(dna_seq.translate(table=1))
     # Remove trailing stop symbol '*'
@@ -55,8 +62,9 @@ def translate_orf(sequence, start, stop):
 
 def codon_frequencies(sequence):
     """
-    Returns a dictionary of codon frequencies for all 64 codons (AAA..TTT),
-    even if they don't appear in the sequence.
+    5.1 Parasykite funkcijas, kurios ivertintu kodonu daznius 
+        (visi imanomi kodonai ir jų atitinkamas daznis  - gali buti 
+        nemazai nuliu, jei ju sekoje nerasite).
     """
     sequence = sequence.upper()
     codons = [sequence[i:i+3] for i in range(0, len(sequence)-2, 3) if len(sequence[i:i+3]) == 3]
@@ -69,8 +77,9 @@ def codon_frequencies(sequence):
 
 def dicodon_frequencies(sequence):
     """
-    Returns a dictionary of dicodon (6-base) frequencies for all 4096 possible
-    dicodons (AAA AAA .. TTT TTT), even if they don't appear.
+    5.2 Parasykite funkcijas, kurios ivertintu dikodonu daznius 
+        (visi imanomi dikodonai ir jų atitinkamas daznis  - gali buti 
+        nemazai nuliu, jei ju sekoje nerasite).
     """
     sequence = sequence.upper()
     codons = [sequence[i:i+3] for i in range(0, len(sequence)-2, 3) if len(sequence[i:i+3]) == 3]
@@ -84,7 +93,9 @@ def dicodon_frequencies(sequence):
 
 
 def analyze_sequence(seq_record, min_orf_len_bp=100):
-    """Find valid ORFs, filter short ones, and translate to protein."""
+    """
+    6.  Palyginkite kodonu bei dikodonu daznius tarp visu seku 
+    """
     sequence = str(seq_record.seq).upper()
     print(f"Analyzing: {seq_record.id}")
     print(f"Sequence length: {len(sequence)}")
@@ -100,23 +111,23 @@ def analyze_sequence(seq_record, min_orf_len_bp=100):
     reverse_proteins = [translate_orf(rev_comp, s, e) for s, e, f in reverse_orfs]
     print(f"Reverse ORFs (≥{min_orf_len_bp}bp): {len(reverse_orfs)}")
 
-    # Show sample translated protein sequences (first few)
-    if forward_proteins:
-        print("\nExample translated protein sequences (forward):")
-        for i, prot in enumerate(forward_proteins[:3], start=1):
-            print(f"  ORF{i}: {prot[:60]}{'...' if len(prot) > 60 else ''}")
+    # Examples of translated protein sequences (first few)
+    # if forward_proteins:
+    #     print("\nExample translated protein sequences (forward):")
+    #     for i, prot in enumerate(forward_proteins[:3], start=1):
+    #         print(f"  ORF{i}: {prot[:60]}{'...' if len(prot) > 60 else ''}")
 
-    if reverse_proteins:
-        print("\nExample translated protein sequences (reverse):")
-        for i, prot in enumerate(reverse_proteins[:3], start=1):
-            print(f"  ORF{i}: {prot[:60]}{'...' if len(prot) > 60 else ''}")
+    # if reverse_proteins:
+    #     print("\nExample translated protein sequences (reverse):")
+    #     for i, prot in enumerate(reverse_proteins[:3], start=1):
+    #         print(f"  ORF{i}: {prot[:60]}{'...' if len(prot) > 60 else ''}")
 
-    codon_freqs = codon_frequencies(sequence)
-    dicodon_freqs = dicodon_frequencies(sequence)
+    # codon_freqs = codon_frequencies(sequence)
+    # dicodon_freqs = dicodon_frequencies(sequence)
 
-    print(f"Example codon frequencies (first 10): {dict(list(codon_freqs.items())[:10])}")
-    print(f"Example dicodon frequencies (first 5): {dict(list(dicodon_freqs.items())[:5])}")
-
+    # Examples of codon and dicodon frequencies (first few)
+    # print(f"Example codon frequencies (first 5): {dict(list(codon_freqs.items())[:5])}")
+    # print(f"Example dicodon frequencies (first 5): {dict(list(dicodon_freqs.items())[:5])}")
 
     print("=" * 50 + "\n")
 
@@ -128,21 +139,25 @@ def analyze_sequence(seq_record, min_orf_len_bp=100):
         "reverse_proteins": reverse_proteins,
     }
 
+
+# 6. 
 def normalize_freqs(freq_dict):
     total = sum(freq_dict.values())
     if total == 0:
         return {k: 0 for k in freq_dict}
     return {k: v / total for k, v in freq_dict.items()}
 
-
+# 6. √[Σ(freq1_i - freq2_i)²]
 def euclidean_distance(vec1, vec2):
     return math.sqrt(sum((vec1[k] - vec2[k]) ** 2 for k in vec1.keys()))
 
 
 def build_distance_matrix(freqs_dict_all):
     """
-    freqs_dict_all: dict {sequence_name: {codon: frequency}}
-    returns: pandas DataFrame (distance matrix)
+    6.  (atstumu matrica - kokia formule naudosite/kaip apskaiciuosite - 
+        parasykite ataskaitoje).
+    7.  Ivertinkite, ar bakteriniai ir zinduoliu virusai sudaro atskirus 
+        klasterius vertinant kodonu/dikodonu dažniu aspektu.
     """
     seq_names = list(freqs_dict_all.keys())
     matrix = []
@@ -156,11 +171,10 @@ def build_distance_matrix(freqs_dict_all):
 
     return pd.DataFrame(matrix, index=seq_names, columns=seq_names)    
 
-
+# 7.
 def simplify_names(df):
     """
-    Rename long sequence names to short labels:
-    bacterial1 -> B1, mamalian1 -> M1, etc.
+    bacterial1 -> B1, mamalian1 -> M1...
     """
     rename_map = {
         'bacterial1': 'B1',
@@ -180,14 +194,25 @@ def simplify_names(df):
                 new_index.append(new)
                 break
         else:
-            new_index.append(idx)  # fallback if no match
+            new_index.append(idx)
 
     df.index = new_index
     df.columns = new_index
     return df
 
+# 7.
+def save_phylip(matrix, filename):
+    n = len(matrix)
+    with open(filename, 'w') as f:
+        f.write(f"{n}\n")
+        for i, row_name in enumerate(matrix.index):
+            # PHYLIP: name padded/truncated to 10 characters
+            name_fmt = f"{row_name:<10}"[:10]
+            row_values = ' '.join(f"{val:.4f}" for val in matrix.iloc[i])
+            f.write(f"{name_fmt}{row_values}\n")
 
-def main_multiple_files():
+
+def main():
     fasta_files = {
         'bacterial1': r".\viruses\viruses\data\bacterial1.fasta",
         'bacterial2': r".\viruses\viruses\data\bacterial2.fasta",
@@ -211,45 +236,29 @@ def main_multiple_files():
             seq_name = f"{file_name}_{seq_record.id}"
             seq_str = str(seq_record.seq).upper()
 
-            # Codon & dicodon frequencies (normalized)
             codon_freqs = normalize_freqs(codon_frequencies(seq_str))
             dicodon_freqs = normalize_freqs(dicodon_frequencies(seq_str))
 
             all_codon_freqs[seq_name] = codon_freqs
             all_dicodon_freqs[seq_name] = dicodon_freqs
 
-            analyze_sequence(seq_record)  # keep your previous analysis
+            analyze_sequence(seq_record)  # keeps previous analysis
 
-    # Build distance matrices
     codon_matrix = build_distance_matrix(all_codon_freqs)
     dicodon_matrix = build_distance_matrix(all_dicodon_freqs)
 
-    # Simplify names (B1, M1, etc.)
     codon_matrix = simplify_names(codon_matrix)
     dicodon_matrix = simplify_names(dicodon_matrix)
 
-    # Round to 4 decimal places
     codon_matrix = codon_matrix.round(4)
     dicodon_matrix = dicodon_matrix.round(4)
 
-    print("\n=== CODON DISTANCE MATRIX ===")
-    print(codon_matrix)
+    save_phylip(codon_matrix, "codon_distance_matrix.phy")
+    save_phylip(dicodon_matrix, "dicodon_distance_matrix.phy")
 
-    print("\n=== DICODON DISTANCE MATRIX ===")
-    print(dicodon_matrix)
-
-    with open("codon_distance_matrix.txt", "w") as f:
-        f.write("=== CODON DISTANCE MATRIX ===\n")
-        f.write(codon_matrix.to_string(float_format="{:.4f}".format))
-        f.write("\n")
-
-    with open("dicodon_distance_matrix.txt", "w") as f:
-        f.write("=== DICODON DISTANCE MATRIX ===\n")
-        f.write(dicodon_matrix.to_string(float_format="{:.4f}".format))
-        f.write("\n")
-
-
-
+    print("\nPHYLIP distance matrices saved as:")
+    print("  codon_distance_matrix.phy")
+    print("  dicodon_distance_matrix.phy")
 
 if __name__ == "__main__":
-    main_multiple_files()
+    main()
