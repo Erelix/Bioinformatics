@@ -1,0 +1,20 @@
+How did the Covid-19 evolve, what path through hosts was taken?
+Path: 
+Camels -> Bats -> Humans
+1. Dromedary Camel coronavirus (MN514967.1)
+2. Various Bat coronavirus strands
+3. SARS coronavirus 2 (NC_045512)
+
+2. Would it be different interpretation if out-group is not used?
+Yes, you wouldn't be abe to tell which virsues evolved from witch. 
+Now it's clear Camel -> Bats -> Humans.
+
+3. What about Urbani SARS origin? 
+Ammm... Well.. My tree doesn't iclude Urbani SARS, just SARS coronavirus 2.
+However, according to research, Urbani SARS originated from bats -> palm civets -> humans, 
+which is a different evolutionary pathway than SARS coronavirus 2."
+
+4. Is the Palm Civet origin evident?
+No, palm civet origin is not evident in this analysis. 
+My tree shows SARS coronavirus 2 clustering directly with 
+bat coronaviruses without any palm civet sequences.
