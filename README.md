@@ -1,3 +1,11 @@
-# Bioinformatics
+# Bioinfromatics
+**2025/2026 Autumn Semester**
 
-py -3.12 lab1.py
+**Course Coordinators:**
+- Gediminas Alzbutas, Partn. Prof., Dr.
+
+**Substitute Course Coordinators:**
+- Saulius Gražulis, Prof., Dr.
+- Irus Grinis, Lekt.
+
+
