@@ -1,0 +1,20 @@
+# Genomic data files
+*.fna
+*.faa
+*.fasta
+
+# BLAST database indices
+*.ndb
+*.nhr
+*.nin
+*.not
+*.nsq
+*.ntf
+*.nto
+
+# Large output/intermediate files
+*.coords
+*.mgaps
+*.ntref
+*.txt
+!conclusions.txt
